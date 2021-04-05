@@ -139,15 +139,19 @@ def reproject_gcps(gcps, reconstruction, reproj_threshold):
             print(f"Could not triangulate {gcp.id} with {n_obs} annotations")
             continue
         for observation in gcp.observations:
+            lat, lon, alt = reconstruction.reference.to_lla(*point)
+            output[gcp.id][observation.shot_id] = {"lla": [lat, lon, alt], "error": 0}
             if observation.shot_id not in reconstruction.shots:
                 continue
             shot = reconstruction.shots[observation.shot_id]
             reproj = shot.project(point)
             error = np.linalg.norm(reproj - observation.projection)
-            output[gcp.id][observation.shot_id] = {
-                "error": error,
-                "reprojection": [reproj[0], reproj[1]],
-            }
+            output[gcp.id][observation.shot_id].update(
+                {
+                    "error": error,
+                    "reprojection": [reproj[0], reproj[1]],
+                }
+            )
     return output
 
 
@@ -477,8 +481,6 @@ def main():
         if not (os.path.exists(os.path.join(path, fn))):
             logger.error(f"Missing file: {fn}")
             return
-
-    assert args.rec_a != args.rec_b, "rec_a and rec_b should be different"
 
     camera_models = data.load_camera_models()
     tracks_manager = data.load_tracks_manager()

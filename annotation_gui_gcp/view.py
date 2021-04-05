@@ -147,6 +147,9 @@ class View:
             return
         self.go_to_image_index(int(sel[0]))
 
+    def pixel_to_latlon(self, x: float, y: float):
+        return None
+
     def add_move_or_remove_gcp(self, x, y, add):
         if self.main_ui.curr_point is None:
             return
@@ -323,9 +326,12 @@ class View:
         reproj = self.main_ui.gcp_manager.gcp_reprojections[point_id].get(shot)
         if not reproj:
             return
-        x2, y2 = reproj["reprojection"]
         x, y = self.gcp_to_pixel_coordinates(x, y)
-        x2, y2 = self.gcp_to_pixel_coordinates(x2, y2)
+        if "reprojection" in reproj:
+            x2, y2 = self.gcp_to_pixel_coordinates(*reproj["reprojection"])
+        elif "lla" in reproj:
+            lat, lon, _ = reproj["lla"]
+            x2, y2 = self.latlon_to_pixel(lat, lon)
         artists = self.ax.plot([x, x2], [y, y2], "r-")
         self.plt_artists.extend(artists)
         if zoom:

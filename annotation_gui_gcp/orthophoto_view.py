@@ -50,6 +50,23 @@ class OrthoPhotoView(View):
             self.center_lat, self.center_lon, self.size
         )
 
+    def latlon_to_pixel(self, lat: float, lon: float) -> Tuple[float, float]:
+        """
+        From latlon to pixels (in the viewing window)
+        """
+        # From WSG84 (lat/lon) to the image crs
+        x, y = rasterio.warp.transform("EPSG:4326", self.geot.crs, [lon], [lat])
+
+        # Image crs to pixel
+        ys, xs = self.geot.index(x, y)
+        x, y = xs[0], ys[0]
+
+        # Offset by the viewing window
+        x -= self.image_window.col_off
+        y -= self.image_window.row_off
+
+        return x, y
+
     def pixel_to_latlon(self, x: float, y: float):
         """
         From pixels (in the viewing window) to latlon

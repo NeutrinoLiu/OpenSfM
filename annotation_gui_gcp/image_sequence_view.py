@@ -103,9 +103,6 @@ class ImageSequenceView(View):
         self.canvas.draw()
         self.update_image_list_text()
 
-    def pixel_to_latlon(self, x: float, y: float):
-        return None
-
     def set_title(self):
         shot = self.current_image
         seq_ix = self.images_in_list.index(shot)

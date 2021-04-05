@@ -325,30 +325,52 @@ function add_or_update_point_observation(xyz) {
 
 function onDocumentMouseClick(event) {
 
-    if (!event.ctrlKey) {
+    if (!event.ctrlKey && !event.altKey) {
         return
     }
 
     event.preventDefault();
 
-    switch (event.button) {
-        case 0: // left
-            const pickposition = setPickPosition(event)
-            _raycaster.setFromCamera(pickposition, camera);
+    if (event.ctrlKey){
+        switch (event.button) {
+            case 0: // left
+                const pickposition = setPickPosition(event)
+                _raycaster.setFromCamera(pickposition, camera);
 
-            const intersections = _raycaster.intersectObject(_cad_model, true);
-            const intersection = (intersections.length) > 0 ? intersections[0] : null;
+                const intersections = _raycaster.intersectObject(_cad_model, true);
+                const intersection = (intersections.length) > 0 ? intersections[0] : null;
 
-            if (intersection !== null) {
-                const xyz = [intersection.point['x'], intersection.point['y'], intersection.point['z']];
-                add_or_update_point_observation(xyz);
-            }
-            break;
-        case 1: // middle
-            break;
-        case 2: // right
-            remove_point_observation();
-            break;
+                if (intersection !== null) {
+                    const xyz = [intersection.point['x'], intersection.point['y'], intersection.point['z']];
+                    add_or_update_point_observation(xyz);
+                }
+                break;
+            case 1: // middle
+                break;
+            case 2: // right
+                remove_point_observation();
+                break;
+        }
+    }
+    else{ // Alt is pressed
+        switch (event.button) {
+            case 0: // left
+                const pickposition = setPickPosition(event)
+                _raycaster.setFromCamera(pickposition, camera);
+
+                const intersections = _raycaster.intersectObject(_cad_model, true);
+                const intersection = (intersections.length) > 0 ? intersections[0] : null;
+
+                if (intersection !== null) {
+                    point_camera_at_xyz(intersection.point);
+                }
+                break;
+            case 1: // middle
+                break;
+            case 2: // right
+                break;
+        }
+
     }
 
 }
@@ -369,14 +391,14 @@ function setPickPosition(event) {
     };
 }
 
-function onWindowResize() {
+// function onWindowResize() {
 
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+//     camera.aspect = window.innerWidth / window.innerHeight;
+//     camera.updateProjectionMatrix();
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
+//     renderer.setSize(window.innerWidth, window.innerHeight);
 
-}
+// }
 
 //a cross-browser method for efficient animation, more info at:
 // http://paulirish.com/2011/requestanimationframe-for-smart-animating/

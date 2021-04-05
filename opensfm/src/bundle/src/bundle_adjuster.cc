@@ -28,7 +28,8 @@ BundleAdjuster::BundleAdjuster() {
   adjust_absolute_position_std_ = false;
   max_num_iterations_ = 500;
   num_threads_ = 1;
-  linear_solver_type_ = "SPARSE_NORMAL_CHOLESKY";
+  linear_solver_type_ = "SPARSE_SCHUR";
+  covariance_algorithm_type_ = "SPARSE_QR";
 }
 
 geometry::Camera BundleAdjuster::GetDefaultCameraSigma(
@@ -455,6 +456,10 @@ void BundleAdjuster::SetLinearSolverType(std::string t) {
   linear_solver_type_ = t;
 }
 
+void BundleAdjuster::SetCovarianceAlgorithmType(std::string t) {
+  covariance_algorithm_type_ = t;
+}
+
 void BundleAdjuster::SetInternalParametersPriorSD(double focal_sd, double c_sd,
                                                   double k1_sd, double k2_sd,
                                                   double p1_sd, double p2_sd,
@@ -506,25 +511,6 @@ ceres::LossFunction *CreateLossFunction(std::string name, double threshold) {
     return new ceres::ArctanLoss(threshold);
   }
   return NULL;
-}
-
-ceres::LinearSolverType LinearSolverTypeFromNamae(std::string name) {
-  if (name.compare("DENSE_QR") == 0) {
-    return ceres::DENSE_QR;
-  } else if (name.compare("DENSE_NORMAL_CHOLESKY") == 0) {
-    return ceres::DENSE_NORMAL_CHOLESKY;
-  } else if (name.compare("SPARSE_NORMAL_CHOLESKY") == 0) {
-    return ceres::SPARSE_NORMAL_CHOLESKY;
-  } else if (name.compare("CGNR") == 0) {
-    return ceres::CGNR;
-  } else if (name.compare("DENSE_SCHUR") == 0) {
-    return ceres::DENSE_SCHUR;
-  } else if (name.compare("SPARSE_SCHUR") == 0) {
-    return ceres::SPARSE_SCHUR;
-  } else if (name.compare("ITERATIVE_SCHUR") == 0) {
-    return ceres::ITERATIVE_SCHUR;
-  }
-  return ceres::SPARSE_SCHUR;
 }
 
 void BundleAdjuster::AddLinearMotion(const std::string &shot0_id,
@@ -1136,8 +1122,9 @@ void BundleAdjuster::Run() {
 
   // Solve
   ceres::Solver::Options options;
-  options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-  options.linear_solver_type = LinearSolverTypeFromNamae(linear_solver_type_);
+  if (!ceres::StringToLinearSolverType(linear_solver_type_, &options.linear_solver_type)){
+    throw std::runtime_error("Linear solver type " + linear_solver_type_ + " doesn't exist.");
+  }
   options.num_threads = num_threads_;
   options.max_num_iterations = max_num_iterations_;
 
@@ -1156,6 +1143,9 @@ void BundleAdjuster::ComputeCovariances(ceres::Problem *problem) {
 
   if (last_run_summary_.termination_type != ceres::FAILURE) {
     ceres::Covariance::Options options;
+    if (!ceres::StringToCovarianceAlgorithmType(covariance_algorithm_type_, &options.algorithm_type)){
+      throw std::runtime_error("Covariance algorithm type " + covariance_algorithm_type_ + " doesn't exist.");
+    }
     ceres::Covariance covariance(options);
 
     std::vector<std::pair<const double *, const double *>> covariance_blocks;

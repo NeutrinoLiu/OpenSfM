@@ -13,6 +13,17 @@ from PIL import ImageColor
 from view import distinct_colors
 
 
+def _load_georeference_metadata(path_cad_model):
+    path_metadata = path_cad_model.with_suffix(".json")
+
+    if not path_metadata.is_file():
+        raise FileNotFoundError(
+            f"Did not find expected metadata file for {path_cad_model} in {path_metadata}"
+        )
+    metadata = json.load(open(path_metadata))
+    return metadata
+
+
 class CadView:
     def __init__(
         self,
@@ -31,8 +42,10 @@ class CadView:
             path_this_file.parent / f"static/resources/cad_models/{self.cad_filename}"
         )
         p_symlink.parent.mkdir(exist_ok=True, parents=True)
-        if not p_symlink.exists():
-            os.symlink(path_cad_file, p_symlink)
+        if p_symlink.is_symlink():
+            os.remove(p_symlink)
+
+        os.symlink(path_cad_file, p_symlink)
 
         # Load data required to georeference this model
         self.load_georeference_metadata(path_cad_file)
@@ -202,9 +215,7 @@ class CadView:
         return lats[0], lons[0], alts[0]
 
     def load_georeference_metadata(self, path_cad_model):
-        if "ZERO" in path_cad_model.name:
-            self.offset = [53199840, 18100590, 0]
-        else:
-            self.offset = [0, 0, 0]
-        self.scale = 100  # model units in a meter
-        self.crs = "EPSG:27700"
+        metadata = _load_georeference_metadata(path_cad_model)
+        self.scale = metadata["scale"]
+        self.crs = metadata["crs"]
+        self.offset = metadata["offset"]

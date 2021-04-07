@@ -1,8 +1,10 @@
 import argparse
+import json
 import tkinter as tk
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 
+import numpy as np
 from opensfm import dataset, io
 
 import GUI
@@ -71,9 +73,8 @@ def parse_args():
     parser.add_argument(
         "--cad",
         type=str,
-        action="append",
-        help="Specify a CAD file in FBX format",
-        default=[],
+        help="Specify a directory containing CAD files in FBX format",
+        default=None,
     )
     return parser.parse_args()
 
@@ -207,6 +208,33 @@ def group_images(args):
         return groups_from_sequence_database, args.sequence_group
 
 
+def find_suitable_cad_paths(path_cad_files, path_dataset, n_paths=3):
+    if path_cad_files is None:
+        return []
+
+    def latlon_from_meta(path_cad):
+        path_meta = path_cad.with_suffix(".json")
+        meta = json.load(open(path_meta))
+        return meta["center"]["latitude"], meta["center"]["longitude"]
+
+    # Returns the top N cad models sorted by distance to the dataset
+    path_cad_files = Path(path_cad_files)
+    cad_files = list(
+        set(
+            list(path_cad_files.glob("**/*.FBX"))
+            + list(path_cad_files.glob("**/*.fbx"))
+        )
+    )
+
+    lla = dataset.DataSet(path_dataset).load_reference_lla()
+    ref_latlon = np.array([lla["latitude"], lla["longitude"]])
+    cad_latlons = np.array([latlon_from_meta(path) for path in cad_files])
+    distances = np.linalg.norm(cad_latlons - ref_latlon, axis=1)
+
+    ixs_sort = np.argsort(distances)[:n_paths]
+    return [cad_files[i] for i in ixs_sort]
+
+
 if __name__ == "__main__":
     args = parse_args()
     path = args.dataset
@@ -220,13 +248,14 @@ if __name__ == "__main__":
     gcp_manager = GroundControlPointManager(path)
     root = tk.Tk()
     root.resizable(True, True)
+
     ui = GUI.Gui(
         root,
         gcp_manager,
         image_manager,
         sequence_groups,
         args.ortho,
-        args.cad,
+        find_suitable_cad_paths(args.cad, path),
     )
     root.grid_columnconfigure(0, weight=1)
     root.grid_rowconfigure(0, weight=1)

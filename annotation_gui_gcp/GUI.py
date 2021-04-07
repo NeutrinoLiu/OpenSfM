@@ -82,7 +82,9 @@ class Gui:
             latlon = v.latlons[k]
             self.create_ortho_views(ortho_paths, latlon["lat"], latlon["lon"])
 
-        self.cad_views = [CadView(self, cad_path) for cad_path in cad_paths]
+        self.cad_views = [
+            CadView(self, cad_path, 5000 + ix) for ix, cad_path in enumerate(cad_paths)
+        ]
 
         self.parent.update_idletasks()
         # self.arrange_ui_onerow()

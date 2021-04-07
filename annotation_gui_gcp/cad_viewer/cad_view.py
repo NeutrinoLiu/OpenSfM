@@ -29,6 +29,7 @@ class CadView:
         self,
         main_ui,
         path_cad_file,
+        port=5000,
         is_geo_reference=False,
     ):
 
@@ -56,7 +57,7 @@ class CadView:
         q = Queue()
         pipe_read, pipe_write = os.pipe()
         server_thread = Thread(
-            target=self.run_server, args=(self.cad_filename, q, pipe_write)
+            target=self.run_server, args=(self.cad_filename, port, q, pipe_write)
         )
         server_thread.start()
 
@@ -85,7 +86,7 @@ class CadView:
         self.eventQueue = Queue()
         self.sync_to_client()
 
-    def run_server(self, cad_filename, q, pipe_write):
+    def run_server(self, cad_filename, port, q, pipe_write):
         cad_app = Flask(__name__)
 
         @cad_app.route("/")
@@ -113,7 +114,7 @@ class CadView:
 
             return Response(eventStream(), mimetype="text/event-stream")
 
-        cad_app.run()
+        cad_app.run(port=port)
         print("CAD view app finished")
 
     def process_message_from_cad_view(self, data):

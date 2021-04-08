@@ -25,7 +25,7 @@ class Gui:
         parent,
         gcp_manager,
         image_manager,
-        sequence_groups=(),
+        rig_groups={},
         ortho_paths=(),
         cad_paths=[],
     ):
@@ -35,7 +35,7 @@ class Gui:
         self.curr_point = None
         self.quick_save_filename = None
         self.shot_std = {}
-        self.sequence_groups = sequence_groups
+        self.rig_groups = rig_groups
         self.path = self.gcp_manager.path
 
         parent.bind_all("q", lambda event: self.go_to_worst_gcp())

@@ -1,6 +1,7 @@
 import argparse
 import json
 import tkinter as tk
+import typing as t
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 
@@ -48,21 +49,6 @@ def parse_args():
         default="sequence_database.json",
     )
     parser.add_argument(
-        "-sg",
-        "--sequence-group",
-        type=str,
-        nargs="+",
-        action="append",
-        help="Specify one or more groups of linked sequences. "
-        "Linked sequences are synchronized such that all views "
-        "from the group will always show the same frame index. "
-        "Useful for camera rigs. usage: -g sequence_key_1 sequence_key_2. "
-        "Can be used multiple times to define several groups. "
-        "Groups defined here will be split into different views even if they "
-        "belong to the same reconstruction. ",
-        default=[],
-    )
-    parser.add_argument(
         "-o",
         "--ortho",
         type=str,
@@ -93,6 +79,26 @@ def file_sanity_check(root, seq_dict, fname):
         print(f"There are {n_missing} images from {fname} missing in {(root/'images')}")
 
     return available_images
+
+
+def load_rig_assignments(root: str) -> t.Dict[str, t.List[str]]:
+    """
+    Returns a dict mapping every shot to all the other corresponding shots in the rig
+    """
+    root = Path(root)
+    p_json = root / "rig_assignments.json"
+    if not p_json.exists():
+        return {}
+
+    output = {}
+    assignments = json.load(open(p_json))
+    for rig_name, shot_groups in assignments.items():
+        for shot_group in shot_groups:
+            group_shot_ids = [s[0] for s in shot_group]
+            for shot_id, _ in shot_group:
+                output[shot_id] = group_shot_ids
+
+    return output
 
 
 def load_sequence_database_from_file(
@@ -161,7 +167,6 @@ def group_by_reconstruction(args, groups_from_sequence_database):
     all_recs_shots = load_shots_from_reconstructions(
         path, min_ims=args.min_images_in_reconstruction
     )
-    grouped_skeys = [skey for g in args.sequence_group for skey in g]
 
     map_key_to_skey = {}
     if groups_from_sequence_database:
@@ -170,26 +175,29 @@ def group_by_reconstruction(args, groups_from_sequence_database):
                 map_key_to_skey[k] = skey
 
     groups = defaultdict(list)
-    sequence_groups = []
     for ix_rec, rec_shots in enumerate(all_recs_shots):
-        sequence_groups.append(
-            [f"REC#{ix_rec}_{skey}" for group in args.sequence_group for skey in group]
-        )
         for key in rec_shots:
-            skey = map_key_to_skey.get(key)
-            if skey in grouped_skeys:
-                # If this sequence is in any of the sequence groups, we want to
-                # re-split each reconstruction into different views if they belong
-                # to a sequence group. (Typical case: a rig of cameras)
-                group_key = f"REC#{ix_rec}_{skey}"
+            if key in map_key_to_skey:
+                group_key = f"REC#{ix_rec}_{map_key_to_skey[key]}"
             else:
                 group_key = f"REC#{ix_rec}"
             groups[group_key].append(key)
 
-    return groups, sequence_groups
+    return groups
 
 
 def group_images(args):
+    """
+    Groups the images to be shown in different windows/views
+
+    If group_by_reconstruction is set, each reconstruction will have its own view
+    If there is a sequence_database file, each sequence will have its own view
+
+    If group_by_reconstruction is set and there is a sequence_database file, the views
+    will be split by sequence and also by reconstruction. For example, if there is a camera
+    rig (4 sequences) that is reconstructed into two disjoint reconstructions, you end up
+    with 8 views.
+    """
     groups_from_sequence_database = load_sequence_database_from_file(
         args.dataset,
         args.sequence_file,
@@ -205,7 +213,7 @@ def group_images(args):
                 " and --group-by-reconstruction is disabled. Quitting"
             )
             exit()
-        return groups_from_sequence_database, args.sequence_group
+        return groups_from_sequence_database
 
 
 def find_suitable_cad_paths(path_cad_files, path_dataset, n_paths=3):
@@ -238,7 +246,8 @@ def find_suitable_cad_paths(path_cad_files, path_dataset, n_paths=3):
 if __name__ == "__main__":
     args = parse_args()
     path = args.dataset
-    groups, sequence_groups = group_images(args)
+    groups = group_images(args)
+    rig_groups = load_rig_assignments(args.dataset)
     image_manager = ImageManager(
         groups,
         path,
@@ -253,7 +262,7 @@ if __name__ == "__main__":
         root,
         gcp_manager,
         image_manager,
-        sequence_groups,
+        rig_groups,
         args.ortho,
         find_suitable_cad_paths(args.cad, path),
     )

@@ -110,13 +110,14 @@ class ImageSequenceView(View):
         self.window.title(title)
 
     def go_to_image_index(self, idx):
-        views_to_update = {self}
-        groups_this_view = [
-            g for g in self.main_ui.sequence_groups if self.group_name in g
-        ]
-        for g in groups_this_view:
+        incoming_image = self.images_in_list[idx]
+        incoming_rig_images = self.main_ui.rig_groups.get(
+            self.images_in_list[idx], [incoming_image]
+        )
+
+        # Update all views in the rig
+        for image in incoming_rig_images:
             for v in self.main_ui.sequence_views:
-                if v.group_name in g and v.images_in_list:
-                    views_to_update.add(v)
-        for v in views_to_update:
-            v.bring_new_image(v.images_in_list[idx])
+                if image in v.images_in_list:
+                    v.bring_new_image(image)
+                    break

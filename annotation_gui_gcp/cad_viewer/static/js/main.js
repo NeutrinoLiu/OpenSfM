@@ -38,6 +38,9 @@ let _cad_model = null;
 // path to currently-loaded cad model
 let _path_model = null;
 
+// Marker that points at the tracked camera
+let _trackingMarker = null;
+
 function getCompoundBoundingBox(object3D) {
     let box = null;
     object3D.traverse(function (obj3D) {
@@ -130,6 +133,8 @@ function setup_scene() {
     _scene.add(camera);
     _scene.add(pointLight);
     _scene.add(ambientLight);
+
+    initializeTrackingMarker();
 }
 
 
@@ -208,6 +213,17 @@ function update_text(data) {
     header.innerHTML = txt;
 }
 
+function initializeTrackingMarker(){
+    const sphereGeometry = new THREE.SphereGeometry(150);
+    _trackingMarker = new THREE.Mesh(sphereGeometry);
+    _trackingMarker.material.color = { 'r': 1.0, 'g': 0, 'b': 0 };
+    _scene.add(_trackingMarker);
+}
+
+function updateTrackingMarker(new_position){
+    _trackingMarker.position.copy(new_position);
+}
+
 function updateGCPLabels(){
     for (var gcp_id in _gcps) {
         const sphere = _gcps[gcp_id]["marker"];
@@ -257,6 +273,7 @@ function update_gcps(annotations) {
 
 function point_camera_at_xyz(point){
     _cameraControls.target.copy(point);
+    updateTrackingMarker(point);
 
     // const direction = controls.target.clone()
     //     .sub(camera.position)

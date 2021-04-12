@@ -198,7 +198,7 @@ class CadView:
         pass
 
     def latlon_to_xyz(self, lat, lon):
-        xs, ys, zs = rasterio.warp.transform("EPSG:4326", self.crs, [lon], [lat], [0])
+        xs, ys, zs = rasterio.warp.transform("EPSG:4326", self.crs, [lon], [lat], [30])
         x = xs[0] * self.scale - self.offset[0]
         y = ys[0] * self.scale - self.offset[1]
         z = zs[0] * self.scale - self.offset[2]

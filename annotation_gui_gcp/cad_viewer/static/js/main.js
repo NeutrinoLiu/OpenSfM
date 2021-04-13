@@ -35,6 +35,7 @@ let _gcps = {};
 
 // cad model
 let _cad_model = null;
+let _cad_model_bbox = null;
 // path to currently-loaded cad model
 let _path_model = null;
 
@@ -99,9 +100,9 @@ function load_cad_model(path_model) {
         _scene.add(object);
 
         // Set the camera position to center of bbox
-        const bbox = getCompoundBoundingBox(object)
+        _cad_model_bbox = getCompoundBoundingBox(object)
         let cameraTarget = new THREE.Vector3();
-        bbox.getCenter(cameraTarget);
+        _cad_model_bbox.getCenter(cameraTarget);
         object.localToWorld(cameraTarget);
 
         _cameraControls.target = cameraTarget;
@@ -271,20 +272,17 @@ function update_gcps(annotations) {
     updateGCPLabels();
 }
 
+function point_camera_at_xy(point){
+    // Replace Z with the maximum Z on the whole model
+    point.y = _cad_model_bbox.max.z
+    point_camera_at_xyz(point);
+}
+
 function point_camera_at_xyz(point){
+    console.log(point);
     _cameraControls.target.copy(point);
     updateTrackingMarker(point);
-
-    // const direction = controls.target.clone()
-    //     .sub(camera.position)
-    //     .normalize()
-    //     .multiplyScalar(distance);
-
-    // camera.updateProjectionMatrix();
-    // camera.position.copy(controls.target).sub(direction);
-
     _cameraControls.update();
-
 }
 
 function initialize_event_source() {
@@ -297,7 +295,7 @@ function initialize_event_source() {
     })
     sse.addEventListener("move_camera", function (e) {
         const data = JSON.parse(e.data);
-        point_camera_at_xyz(data);
+        point_camera_at_xy(data);
     })
 }
 

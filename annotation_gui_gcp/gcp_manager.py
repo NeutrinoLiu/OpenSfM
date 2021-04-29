@@ -18,16 +18,12 @@ class GroundControlPointManager:
         self.image_cache = {}
         self.id_generator = id_generator()
 
-        # p_gcp_errors = self.path + "/gcp_reprojections_0x1.json"
-        # self.load_gcp_reprojections(p_gcp_errors)
-
     def load_gcp_reprojections(self, filename):
         if os.path.isfile(filename):
             with open(filename, "r") as f:
                 self.gcp_reprojections = json.load(f)
         else:
             self.gcp_reprojections = {}
-            print(f"Not found: {filename}")
 
     def load_from_file(self, file_path):
         self.points = OrderedDict()

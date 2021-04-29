@@ -1,5 +1,6 @@
 import argparse
 import json
+import shutil
 import tkinter as tk
 import typing as t
 from collections import OrderedDict, defaultdict
@@ -81,22 +82,64 @@ def file_sanity_check(root, seq_dict, fname):
     return available_images
 
 
+def update_reconstruction_and_assignments_to_new_format(root):
+    """
+    The format for the rigs was updated at some point.
+    The tool now expects reconstructions and rig assignments to be in the new format
+    This function updates these two files if needed, creating a backup as well:
+      - reconstruction.json
+      - rig_assignments.json
+    """
+
+    # Reconstruction
+    p_reconstruction = root / "reconstruction.json"
+    recs_raw = json.load(open(p_reconstruction))
+    need_dump = False
+    for ix_rec, rec in enumerate(recs_raw):
+        if "rig_models" in rec:
+            print(f"Updating rig format of {p_reconstruction}")
+            need_dump = True
+            recs_raw[ix_rec]["rig_cameras"] = {}
+            for rig_model_id, rig_model in rec["rig_models"].items():
+                recs_raw[ix_rec]["rig_cameras"].update(rig_model["rig_cameras"])
+            del rec["rig_models"]
+
+    if need_dump:
+        p_backup = root / "reconstruction_old_rigs_format.json"
+        shutil.copy(p_reconstruction, p_backup)
+        with open(p_reconstruction, "w") as f:
+            json.dump(recs_raw, f, indent=4, sort_keys=True)
+
+    # Assignments file
+    p_assignments = root / "rig_assignments.json"
+    assignments_raw = json.load(open(p_assignments))
+    if isinstance(assignments_raw, dict):
+        print(f"Updating rig format of {p_assignments}")
+        new_assignments = []
+        for rig_assignment in assignments_raw.values():
+            new_assignments.extend(rig_assignment)
+        p_backup = root / "rig_assignments_old_rigs_format.json"
+        shutil.copy(p_assignments, p_backup)
+        with open(p_assignments, "w") as f:
+            json.dump(new_assignments, f, indent=4, sort_keys=True)
+
+
 def load_rig_assignments(root: str) -> t.Dict[str, t.List[str]]:
     """
     Returns a dict mapping every shot to all the other corresponding shots in the rig
     """
     root = Path(root)
+    update_reconstruction_and_assignments_to_new_format(root)
     p_json = root / "rig_assignments.json"
     if not p_json.exists():
         return {}
 
     output = {}
     assignments = json.load(open(p_json))
-    for rig_name, shot_groups in assignments.items():
-        for shot_group in shot_groups:
-            group_shot_ids = [s[0] for s in shot_group]
-            for shot_id, _ in shot_group:
-                output[shot_id] = group_shot_ids
+    for shot_group in assignments:
+        group_shot_ids = [s[0] for s in shot_group]
+        for shot_id, _ in shot_group:
+            output[shot_id] = group_shot_ids
 
     return output
 
@@ -246,8 +289,8 @@ def find_suitable_cad_paths(path_cad_files, path_dataset, n_paths=3):
 if __name__ == "__main__":
     args = parse_args()
     path = args.dataset
-    groups = group_images(args)
     rig_groups = load_rig_assignments(args.dataset)
+    groups = group_images(args)
     image_manager = ImageManager(
         groups,
         path,

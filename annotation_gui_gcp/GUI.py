@@ -91,12 +91,14 @@ class Gui:
 
     def rec_ix_changed(self, *args):
         # Load analysis for the new reconstruction pair if it exists
-        ix_a = self.reconstruction_options.index(self.rec_a.get())
-        ix_b = self.reconstruction_options.index(self.rec_b.get())
-        if ix_b == len(self.reconstruction_options) - 1:
-            ix_b = None
-        print(f"Loading analysis results for {self.rec_a.get()} vs {self.rec_b.get()}")
-        self.load_analysis_results(ix_a, ix_b)
+        self.ix_a = self.reconstruction_options.index(self.rec_a.get())
+        self.ix_b = self.reconstruction_options.index(self.rec_b.get())
+        if self.ix_b == len(self.reconstruction_options) - 1:
+            self.ix_b = None
+        print(
+            f"Loading analysis results for #{self.ix_a}:{self.rec_a.get()} vs #{self.ix_b}:{self.rec_b.get()}"
+        )
+        self.load_analysis_results(self.ix_a, self.ix_b)
         for view in self.sequence_views:
             view.populate_image_list()
 
@@ -156,6 +158,7 @@ class Gui:
         analysis_frame.pack(side="top")
 
         options = self.reconstruction_options
+        self.ix_a = 0
         self.rec_a = tk.StringVar(parent)
         self.rec_a.set(options[0])
         self.rec_a.trace("w", self.rec_ix_changed)
@@ -163,6 +166,7 @@ class Gui:
         w.pack(side="top", fill=tk.X)
         w.config(width=width)
 
+        self.ix_b = None
         self.rec_b = tk.StringVar(parent)
         self.rec_b.set(options[1])
         self.rec_b.trace("w", self.rec_ix_changed)

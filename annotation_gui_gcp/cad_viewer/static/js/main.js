@@ -26,7 +26,7 @@ const camera = new THREE.PerspectiveCamera(view_angle, aspect);
 //constructs an instance of a white light
 renderer.setClearColor(0x05CB63); // Background color
 const pointLight = new THREE.PointLight(0xFFFFFF);
-const ambientLight = new THREE.AmbientLight( 0x404040 ); // soft white light
+const ambientLight = new THREE.AmbientLight(0x404040); // soft white light
 
 let _raycaster;
 
@@ -214,71 +214,95 @@ function update_text(data) {
     header.innerHTML = txt;
 }
 
-function initializeTrackingMarker(){
+function initializeTrackingMarker() {
     const sphereGeometry = new THREE.SphereGeometry(150);
     _trackingMarker = new THREE.Mesh(sphereGeometry);
     _trackingMarker.material.color = { 'r': 1.0, 'g': 0, 'b': 0 };
     _scene.add(_trackingMarker);
 }
 
-function updateTrackingMarker(new_position){
+function updateTrackingMarker(new_position) {
     _trackingMarker.position.copy(new_position);
 }
 
-function updateGCPLabels(){
+function updateGCPLabels() {
     for (var gcp_id in _gcps) {
         const sphere = _gcps[gcp_id]["marker"];
         const sprite = _gcps[gcp_id]["label"]
         const director_vector = new THREE.Vector3();
         director_vector.subVectors(camera.position, sphere.position);
         const cam_to_gcp_distance = director_vector.length();
-        sprite.scale.set(cam_to_gcp_distance/5, cam_to_gcp_distance/10, 1.0);
+        sprite.scale.set(cam_to_gcp_distance / 5, cam_to_gcp_distance / 10, 1.0);
         sprite.position.addVectors(sphere.position, director_vector.setLength(300.0));
-        sprite.center.set(0,1)
+        sprite.center.set(0, 1)
     }
+}
+
+function create_or_update_gcp(gcp_id, xyz, reprojection_xyz, color) {
+    const gcp_position = new THREE.Vector3(xyz[0], xyz[1], xyz[2]);
+    const gcp_reprojection = reprojection_xyz ? new THREE.Vector3(reprojection_xyz[0], reprojection_xyz[1], reprojection_xyz[2]) : gcp_position;
+    let sphere;
+    let sprite;
+    let line;
+    // check if the property/key is defined in the object itself, not in parent
+    if (!_gcps.hasOwnProperty(gcp_id)) {
+
+        // A sphere marks the location of the annotation
+        const sphereGeometry = new THREE.SphereGeometry(50);
+        sphere = new THREE.Mesh(sphereGeometry);
+        _scene.add(sphere);
+
+        // A label
+        sprite = makeTextSprite(gcp_id, { fontsize: 32, fontface: "Georgia" });
+        _scene.add(sprite);
+
+        // A line from the annotation position to its reprojection
+        const line_material = new THREE.LineBasicMaterial();
+        const geometry = new THREE.BufferGeometry();
+        line = new THREE.Line(geometry, line_material);
+        _scene.add(line);
+
+        _gcps[gcp_id] = { "marker": sphere, "label": sprite, "reprojectionLine": line };
+    }
+    else {
+        sphere = _gcps[gcp_id]["marker"];
+        sprite = _gcps[gcp_id]["label"]
+        line = _gcps[gcp_id]["reprojectionLine"]
+    }
+    sphere.position.copy(gcp_position);
+    sphere.material.color = { 'r': color[0] / 255.0, 'g': color[1] / 255.0, 'b': color[2] / 255.0 };
+    sphere.material.needsupdate = true;
+    line.geometry.setFromPoints([gcp_position, gcp_reprojection]);
+    line.material.color = { 'r': color[0] / 255.0, 'g': color[1] / 255.0, 'b': color[2] / 255.0 };
 }
 
 function update_gcps(annotations) {
     for (var gcp_id in _gcps) {
-        if (!annotations.hasOwnProperty(gcp_id)){
+        if (!annotations.hasOwnProperty(gcp_id)) {
             _scene.remove(_gcps[gcp_id]["marker"])
             _scene.remove(_gcps[gcp_id]["label"])
+            _scene.remove(_gcps[gcp_id]["reprojectionLine"])
             delete _gcps[gcp_id];
         }
     }
     for (var gcp_id in annotations) {
-        const xyz = annotations[gcp_id]["coordinates"];
-        const gcp_position = new THREE.Vector3(xyz[0], xyz[1], xyz[2]);
-        const color = annotations[gcp_id]["color"];
-        let sphere;
-        let sprite;
-        // check if the property/key is defined in the object itself, not in parent
-        if (!_gcps.hasOwnProperty(gcp_id)) {
-            const sphereGeometry = new THREE.SphereGeometry(50);
-            sphere = new THREE.Mesh(sphereGeometry);
-            sprite = makeTextSprite(gcp_id, { fontsize: 32, fontface: "Georgia", borderColor: { r: color[0], g: color[1], b: color[2], a: 1.0 } });
-            _scene.add(sphere);
-            _scene.add(sprite);
-            _gcps[gcp_id] = { "marker": sphere, "label": sprite };
-        }
-        else {
-            sphere = _gcps[gcp_id]["marker"];
-            sprite = _gcps[gcp_id]["label"]
-        }
-        sphere.position.copy(gcp_position);
-        sphere.material.color = { 'r': color[0] / 255.0, 'g': color[1] / 255.0, 'b': color[2] / 255.0 };
-        sphere.material.needsupdate = true;
+        create_or_update_gcp(
+            gcp_id,
+            annotations[gcp_id]["coordinates"],
+            annotations[gcp_id].hasOwnProperty("reprojection") ? annotations[gcp_id]["reprojection"] : null,
+            annotations[gcp_id]["color"],
+        );
     }
     updateGCPLabels();
 }
 
-function point_camera_at_xy(point){
+function point_camera_at_xy(point) {
     // Replace Z with the maximum Z on the whole model
     point.y = _cad_model_bbox.max.z
     point_camera_at_xyz(point);
 }
 
-function point_camera_at_xyz(point){
+function point_camera_at_xyz(point) {
     console.log(point);
     _cameraControls.target.copy(point);
     updateTrackingMarker(point);
@@ -346,7 +370,7 @@ function onDocumentMouseClick(event) {
 
     event.preventDefault();
 
-    if (event.ctrlKey){
+    if (event.ctrlKey) {
         switch (event.button) {
             case 0: // left
                 const pickposition = setPickPosition(event)
@@ -367,7 +391,7 @@ function onDocumentMouseClick(event) {
                 break;
         }
     }
-    else{ // Alt is pressed
+    else { // Alt is pressed
         switch (event.button) {
             case 0: // left
                 const pickposition = setPickPosition(event)
@@ -438,7 +462,7 @@ function update() {
 
     _cameraControls.update(1);
 
-    pointLight.position.copy( camera.position );
+    pointLight.position.copy(camera.position);
 
     draw();
 }

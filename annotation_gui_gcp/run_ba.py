@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+from collections import defaultdict
 
 import numpy as np
 import opensfm.reconstruction as orec
@@ -473,6 +474,96 @@ def parse_args():
     return args
 
 
+def align_external_3d_models_to_reconstruction(data, gcps, reconstruction, ix_rec):
+    """
+    Triangulates all the control points in common with 3D models (those that have at least one 3D annotation)
+    and saves them in the coordinate space of the 3D models so that they can be visualized in the annotation tool.
+
+    gcps only contains the 2D observations
+    We re-load the gcps file here manually to also get the 3D observations (hacky but will do for now)
+    """
+
+    # Manually load GCP file to get the 3D annotations
+    # Dict[model_filename, List[Tuple[3d_point, gcp_id]]
+
+    # Create a mapping from filename to gcp ids (for those gcps that have 3D annotations)
+    map_filename_to_gcp_ids = defaultdict(set)
+    gcps_3d = load_3d_annotations_from_gcp_file(data)
+    for shot_id, observations in gcps_3d.items():
+        for _coords, gcp_id in observations:
+            map_filename_to_gcp_ids[shot_id].add(gcp_id)
+
+    gcps_per_source_file = defaultdict(list)
+    # Group the 2D annotations by the 3D model that they're also annotated in
+    for gcp in gcps:
+        for (
+            shot_id,
+            gcp_ids_annotated_in_3d_for_this_file,
+        ) in map_filename_to_gcp_ids.items():
+            if gcp.id in gcp_ids_annotated_in_3d_for_this_file:
+                gcps_per_source_file[shot_id].append(gcp)
+
+    # We now operate independently on each 3D model
+    for model_id, gcps_this_model in gcps_per_source_file.items():
+        print(f"{model_id} has {len(gcps)} gcps")
+        if len(gcps) < 3:
+            print(f"{model_id} has {len(gcps)} gcps, not aligning")
+            continue
+
+        coords_triangulated_gcps = triangulate_gcps(gcps_this_model, reconstruction)
+        n_triangulated = sum(x is not None for x in coords_triangulated_gcps)
+        if n_triangulated < 3:
+            print(f"{model_id} has {n_triangulated} gcps, not aligning")
+            continue
+
+        coords_annotated_gcps = []
+        for gcp, coords in zip(gcps, coords_triangulated_gcps):
+            # Find the corresponding 3D-annotated gcp coordinates, add in the same order
+            for annotated_point_3D, gcp_id in gcps_3d[model_id]:
+                if gcp_id == gcp.id:
+                    coords_annotated_gcps.append(annotated_point_3D)
+                    break
+
+        s, A, b = find_alignment(coords_triangulated_gcps, coords_annotated_gcps)
+
+        # Move / "reproject" the triangulated GCPs to the reference frame of the CAD model for display/interaction
+        gcp_reprojections = {}
+        for gcp, coords in zip(gcps, coords_triangulated_gcps):
+            gcp_reprojections[gcp.id] = (s * A.dot(coords) + b).tolist()
+
+        p_out = f"{data.data_path}/gcp_reprojections_3D_{ix_rec}x{model_id}.json"
+        print(f"Saving reprojected 3D points to {p_out}")
+        json.dump(gcp_reprojections, open(p_out, "w"), indent=4, sort_keys=True)
+
+
+def load_3d_annotations_from_gcp_file(data):
+    raw_gcps = json.load(open(data._ground_control_points_file()))
+    dict_gcps = defaultdict(list)
+    for gcp in raw_gcps["points"]:
+        for obs in gcp["observations"]:
+            if "point" in obs:
+                dict_gcps[obs["shot_id"]].append((obs["point"], gcp["id"]))
+    return dict_gcps
+
+
+def fix_3d_annotations_in_gcp_file(data):
+    # Temporary hack: correct the GCP file so that 3D observations are called 'point' and not 'projection'
+    raw_gcps = json.load(open(data._ground_control_points_file()))
+    for gcp in raw_gcps["points"]:
+        for obs in gcp["observations"]:
+            if "projection" not in obs:
+                continue
+            if len(obs["projection"]) == 3:
+                obs["point"] = obs["projection"]
+                del obs["projection"]
+    json.dump(
+        raw_gcps,
+        open(data._ground_control_points_file(), "w"),
+        indent=4,
+        sort_keys=True,
+    )
+
+
 def main():
     args = parse_args()
     path = args.dataset
@@ -484,12 +575,14 @@ def main():
 
     camera_models = data.load_camera_models()
     tracks_manager = data.load_tracks_manager()
+    fix_3d_annotations_in_gcp_file(data)
     gcps = data.load_ground_control_points()
 
     fn_resplit = f"reconstruction_gcp_ba_resplit_{args.rec_a}x{args.rec_b}.json"
     fn_rigid = f"reconstruction_gcp_rigid_{args.rec_a}x{args.rec_b}.json"
+    fn_cad_model_alignments = f"cad_models_to_{args.rec_a}.json"
 
-    if args.rec_b is not None:  # reconstruction - to - reconstruction annotation
+    if args.rec_b is not None:  # reconstruction - to - reconstruction alignment
         if args.rigid and os.path.exists(data._reconstruction_file(fn_resplit)):
             reconstructions = data.load_reconstruction(fn_resplit)
         else:
@@ -509,6 +602,10 @@ def main():
         base = reconstructions[args.rec_a]
         resected = resect_annotated_single_images(base, gcps, camera_models, data)
         reconstructions = [base, resected]
+
+    align_external_3d_models_to_reconstruction(
+        data, gcps, reconstructions[0], args.rec_a
+    )
 
     # Set the GPS constraint of the moved/resected shots to the manually-aligned position
     for shot in reconstructions[1].shots.values():

@@ -55,7 +55,10 @@ class GroundControlPointManager:
         for point_id, observations in self.points.items():
             for observation in observations:
                 if observation["shot_id"] == main_image:
-                    visible_points_coords[point_id] = observation["projection"]
+                    if "point" in observation:
+                        visible_points_coords[point_id] = observation["point"]
+                    else:
+                        visible_points_coords[point_id] = observation["projection"]
 
         return visible_points_coords
 
@@ -69,7 +72,9 @@ class GroundControlPointManager:
         self.points[new_id] = []
         return new_id
 
-    def add_point_observation(self, point_id, shot_id, projection, latlon=None):
+    def add_point_observation(
+        self, point_id, shot_id, projection_or_point, latlon=None
+    ):
         if not self.point_exists(point_id):
             raise ValueError(f"ERROR: trying to modify a non-existing point {point_id}")
 
@@ -80,12 +85,13 @@ class GroundControlPointManager:
             }
             if len(latlon) == 3:
                 self.latlons[point_id]["altitude"] = latlon[2]
-        self.points[point_id].append(
-            {
-                "shot_id": shot_id,
-                "projection": projection,
-            }
-        )
+
+        obs = {"shot_id": shot_id}
+        if len(projection_or_point) == 2:
+            obs["projection"] = projection_or_point
+        else:
+            obs["point"] = projection_or_point
+        self.points[point_id].append(obs)
 
     def get_worst_gcp(self):
         worst_gcp_error = 0

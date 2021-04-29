@@ -172,10 +172,21 @@ class CadView:
         }
 
         # Pick a color for each point
+        fn_reprojections = Path(
+            f"{self.main_ui.path}/gcp_reprojections_3D_{self.main_ui.ix_a}x{self.cad_filename}.json"
+        )
+        if fn_reprojections.exists():
+            reprojections = json.load(open(fn_reprojections))
+        else:
+            reprojections = {}
         for point_id, coords in visible_points_coords.items():
             hex_color = distinct_colors[divmod(hash(point_id), 19)[1]]
             color = ImageColor.getrgb(hex_color)
             data["annotations"][point_id] = {"coordinates": coords, "color": color}
+
+            reproj = reprojections.get(point_id)
+            if reproj:
+                data["annotations"][point_id]["reprojection"] = reproj
 
         self.send_sse_message(data)
 

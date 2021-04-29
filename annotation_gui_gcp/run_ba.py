@@ -342,6 +342,7 @@ def resect_annotated_single_images(reconstruction, gcps, camera_models, data):
                 not_in_rec.add(im)
 
     resected = types.Reconstruction()
+    resected.reference = reconstruction.reference
     for im in not_in_rec:
         exif = data.load_exif(im)
         camera = camera_models[exif["camera"]]

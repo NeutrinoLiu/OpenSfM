@@ -7,6 +7,11 @@ from opensfm import pygeometry
 from opensfm import pymap
 from opensfm import pysfm
 from opensfm import types
+from opensfm.test.utils import (
+    assert_metadata_equal,
+    assert_cameras_equal,
+    assert_shots_equal,
+)
 
 
 def _create_reconstruction(
@@ -82,13 +87,6 @@ Camera Tests
 """
 
 
-def _helper_compare_persp_cameras(cam1, cam2):
-    assert cam1.focal == cam2.focal
-    assert cam1.id == cam2.id
-    assert cam1.k1 == cam2.k1
-    assert cam1.k2 == cam2.k2
-
-
 def test_create_cameras():
     n_cameras = 100
     rec = types.Reconstruction()
@@ -99,7 +97,7 @@ def test_create_cameras():
         cam.id = str(cam_id)
         # create the camera within the reconstruction
         map_cam = rec.add_camera(cam)
-        _helper_compare_persp_cameras(cam, map_cam)
+        assert_cameras_equal(cam, map_cam)
         # Check that the cameras are different
         assert cam is not map_cam
         # Check the getters
@@ -298,43 +296,6 @@ def test_spherical_camera():
 
 
 # Test Metadata
-
-
-def _helper_metadata_equal(m1, m2):
-    # Asserts if both are correct and if the exist
-    assert m1.capture_time.has_value == m2.capture_time.has_value
-    if m1.capture_time.has_value:
-        assert m1.capture_time.value == m2.capture_time.value
-
-    assert m1.gps_position.has_value == m2.gps_position.has_value
-    if m1.gps_position.has_value:
-        assert np.allclose(m1.gps_position.value, m2.gps_position.value)
-
-    assert m1.gps_accuracy.has_value == m2.gps_accuracy.has_value
-    if m1.gps_accuracy.has_value:
-        assert m1.gps_accuracy.value == m2.gps_accuracy.value
-
-    assert m1.compass_accuracy.has_value == m2.compass_accuracy.has_value
-    if m1.compass_accuracy.has_value:
-        assert m1.compass_accuracy.value == m2.compass_accuracy.value
-
-    assert m1.compass_angle.has_value == m2.compass_angle.has_value
-    if m1.compass_angle.has_value:
-        assert m1.compass_angle.value == m2.compass_angle.value
-
-    assert m1.accelerometer.has_value == m2.accelerometer.has_value
-    if m1.accelerometer.has_value:
-        assert np.allclose(m1.accelerometer.value, m2.accelerometer.value)
-
-    assert m1.orientation.has_value == m2.orientation.has_value
-    if m1.orientation.has_value:
-        assert m1.orientation.value == m2.orientation.value
-
-    assert m1.sequence_key.has_value == m2.sequence_key.has_value
-    if m1.sequence_key.has_value:
-        assert m1.sequence_key.value == m2.sequence_key.value
-
-
 def _help_measurement_test(measurement, attr, val):
     # Test metadata's has_value properties
     assert getattr(measurement, attr).has_value is False
@@ -381,11 +342,11 @@ def test_shot_measurement_set():
     # Test setting metadata with other metadata
     m2.set(m1)
     # Check that m2 has the same values as m1
-    _helper_metadata_equal(m1, m2)
+    assert_metadata_equal(m1, m2)
     m3 = pymap.ShotMeasurements()
     m1.set(m3)
     # Now m1 should be completely reset
-    _helper_metadata_equal(m1, m3)
+    assert_metadata_equal(m1, m3)
 
 
 def test_shot_create():
@@ -651,33 +612,25 @@ def test_pano_shot_create_remove_create():
     assert len(rec.pano_shots) == n_shots
 
 
-def _create_rig_model():
-    rig_model = pymap.RigModel("rig_model")
+def _create_rig_camera():
     rig_camera = pymap.RigCamera()
     rig_camera.id = "rig_camera"
-    rig_model.add_rig_camera(rig_camera)
-    return rig_model
+    return rig_camera
 
 
 def _create_rig_instance():
     rec = _create_reconstruction(1, {"0": 2})
-    rig_model = rec.add_rig_model(_create_rig_model())
-    rig_instance = pymap.RigInstance(rig_model, 1)
+    rig_camera = rec.add_rig_camera(_create_rig_camera())
+    rig_instance = pymap.RigInstance(1)
     shot = pymap.Shot("0", pygeometry.Camera.create_spherical(), pygeometry.Pose())
-    rig_instance.add_shot("rig_camera", shot)
+    rig_instance.add_shot(rig_camera, shot)
     return rec, rig_instance, shot
 
 
-def test_rig_model():
-    rig_model = _create_rig_model()
-    rig_camera_retrieved = rig_model.get_rig_camera("rig_camera")
-    assert rig_camera_retrieved.id == "rig_camera"
-
-
-def test_rig_model_create():
+def test_rig_camera_create():
     rec = _create_reconstruction(1, {"0": 2})
-    rec.add_rig_model(_create_rig_model())
-    assert list(rec.rig_models.keys()) == ["rig_model"]
+    rec.add_rig_camera(_create_rig_camera())
+    assert list(rec.rig_cameras.keys()) == ["rig_camera"]
 
 
 def test_rig_instance():
@@ -690,7 +643,7 @@ def test_rig_instance_create():
     rec.add_rig_instance(rig_instance)
 
     assert len(rec.rig_instances) == 1
-    assert list(rec.rig_models.keys()) == ["rig_model"]
+    assert dict(rec.rig_instances[1].camera_ids.items()) == {"0": "rig_camera"}
     assert list(rec.rig_instances[1].shots.keys()) == ["0"]
 
 
@@ -704,14 +657,6 @@ def test_rig_shot_set_pose():
     _, rig_instance, shot = _create_rig_instance()
     with pytest.raises(RuntimeError):
         shot.pose = pygeometry.Pose()
-
-
-def _helper_shots_equal(shot1, shot2):
-    assert shot1.id == shot2.id
-    assert shot1.merge_cc == shot2.merge_cc
-    assert shot1.camera.id == shot2.camera.id
-    assert np.allclose(shot1.covariance, shot2.covariance)
-    _helper_metadata_equal(shot1.metadata, shot2.metadata)
 
 
 def test_add_shot_from_shot_correct_value():
@@ -733,7 +678,7 @@ def test_add_shot_from_shot_correct_value():
 
     # ... and new's shots values should be the same as rec's ones'
     for k in rec_new.shots.keys():
-        _helper_shots_equal(rec.shots[k], rec_new.shots[k])
+        assert_shots_equal(rec.shots[k], rec_new.shots[k])
 
 
 def test_shot_metadata_different():
@@ -761,7 +706,7 @@ def test_shot_metadata_assign_equal():
     assert shot1.metadata is not shot2.metadata
 
     # ... but their values are equal
-    _helper_metadata_equal(shot1.metadata, shot2.metadata)
+    assert_metadata_equal(shot1.metadata, shot2.metadata)
 
 
 def test_add_pano_shot_from_shot_correct_value():
@@ -780,7 +725,7 @@ def test_add_pano_shot_from_shot_correct_value():
 
     # Then new's shots values should be the same as rec's ones'
     for k in rec_new.shots.keys():
-        _helper_shots_equal(rec.pano_shots[k], rec_new.pano_shots[k])
+        assert_shots_equal(rec.pano_shots[k], rec_new.pano_shots[k])
 
 
 def test_single_point_create():
@@ -1059,19 +1004,19 @@ def test_rec_deepcopy():
     for k in rec.cameras:
         cam, cam_cpy = rec.cameras[k], rec2.cameras[k]
         assert cam != cam_cpy
-        _helper_compare_persp_cameras(cam, cam_cpy)
+        assert_cameras_equal(cam, cam_cpy)
 
     # Shots are different objects of same value
     for shot_id in rec2.shots.keys():
         shot1, shot2 = rec.shots[shot_id], rec2.shots[shot_id]
         assert shot1 is not shot2
-        _helper_shots_equal(shot1, shot2)
+        assert_shots_equal(shot1, shot2)
 
     # Pano shots are different objects of same value
     for shot_id in rec2.pano_shots.keys():
         shot1, shot2 = rec.pano_shots[shot_id], rec2.pano_shots[shot_id]
         assert shot1 is not shot2
-        _helper_shots_equal(shot1, shot2)
+        assert_shots_equal(shot1, shot2)
 
     # Points are different objects of same value
     for pt_id in rec2.points:

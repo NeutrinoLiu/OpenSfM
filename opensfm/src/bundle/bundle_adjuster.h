@@ -57,11 +57,11 @@ struct Reconstruction {
     return &(scales[shot]);
   }
 
-  double GetScale(const std::string &shot) {
+  double GetScale(const std::string &shot) const {
     if (shared) {
       return scales.begin()->second;
     }
-    return scales[shot];
+    return scales.at(shot);
   }
   void SetScale(const std::string &shot, double v) {
     if (shared) {
@@ -307,16 +307,12 @@ class BundleAdjuster {
   // Rigs
   void AddRigInstance(
       const std::string &rig_instance_id,
-      const geometry::Pose &rig_instance_pose, const std::string &rig_model,
+      const geometry::Pose &rig_instance_pose,
       const std::unordered_map<std::string, std::string> &shot_cameras,
       const std::unordered_map<std::string, std::string> &shot_rig_cameras,
       bool fixed);
-  void AddRigModel(
-      const std::string &rig_model,
-      const std::unordered_map<std::string, geometry::Pose> &cameras_poses,
-      const std::unordered_map<std::string, geometry::Pose>
-          &cameras_poses_prior,
-      bool fixed);
+  void AddRigCamera(const std::string &rig_camera, const geometry::Pose &pose,
+                    const geometry::Pose &pose_prior, bool fixed);
   void AddRigPositionPrior(const std::string &instance_id,
                            const Vec3d &position, double std_deviation);
 
@@ -410,7 +406,7 @@ class BundleAdjuster {
                                double rig_rotation_sd);
 
   void SetComputeCovariances(bool v);
-  bool GetCovarianceEstimationValid();
+  bool GetCovarianceEstimationValid() const;
   void SetComputeReprojectionErrors(bool v);
 
   // Minimization
@@ -419,16 +415,16 @@ class BundleAdjuster {
   void ComputeReprojectionErrors();
 
   // Getters
-  geometry::Camera GetCamera(const std::string &id);
-  Shot GetShot(const std::string &id);
-  Reconstruction GetReconstruction(const std::string &id);
-  Point GetPoint(const std::string &id);
-  RigModel GetRigModel(const std::string &model_id);
-  RigInstance GetRigInstance(const std::string &instance_id);
+  geometry::Camera GetCamera(const std::string &id) const;
+  Shot GetShot(const std::string &id) const;
+  Reconstruction GetReconstruction(const std::string &id) const;
+  Point GetPoint(const std::string &id) const;
+  RigCamera GetRigCamera(const std::string &rig_camera_id) const;
+  RigInstance GetRigInstance(const std::string &instance_id) const;
 
   // Minimization details
-  std::string BriefReport();
-  std::string FullReport();
+  std::string BriefReport() const;
+  std::string FullReport() const;
 
  private:
   // default sigmas
@@ -441,7 +437,7 @@ class BundleAdjuster {
   std::map<std::string, RigShot> rig_shots_;
   std::map<std::string, Reconstruction> reconstructions_;
   std::map<std::string, Point> points_;
-  std::map<std::string, RigModel> rig_models_;
+  std::map<std::string, RigCamera> rig_cameras_;
   std::map<std::string, RigInstance> rig_instances_;
 
   bool use_analytic_{false};

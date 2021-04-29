@@ -93,35 +93,37 @@ def update_reconstruction_and_assignments_to_new_format(root):
 
     # Reconstruction
     p_reconstruction = root / "reconstruction.json"
-    recs_raw = json.load(open(p_reconstruction))
-    need_dump = False
-    for ix_rec, rec in enumerate(recs_raw):
-        if "rig_models" in rec:
-            print(f"Updating rig format of {p_reconstruction}")
-            need_dump = True
-            recs_raw[ix_rec]["rig_cameras"] = {}
-            for rig_model_id, rig_model in rec["rig_models"].items():
-                recs_raw[ix_rec]["rig_cameras"].update(rig_model["rig_cameras"])
-            del rec["rig_models"]
+    if p_reconstruction.exists():
+        recs_raw = json.load(open(p_reconstruction))
+        need_dump = False
+        for ix_rec, rec in enumerate(recs_raw):
+            if "rig_models" in rec:
+                print(f"Updating rig format of {p_reconstruction}")
+                need_dump = True
+                recs_raw[ix_rec]["rig_cameras"] = {}
+                for rig_model_id, rig_model in rec["rig_models"].items():
+                    recs_raw[ix_rec]["rig_cameras"].update(rig_model["rig_cameras"])
+                del rec["rig_models"]
 
-    if need_dump:
-        p_backup = root / "reconstruction_old_rigs_format.json"
-        shutil.copy(p_reconstruction, p_backup)
-        with open(p_reconstruction, "w") as f:
-            json.dump(recs_raw, f, indent=4, sort_keys=True)
+        if need_dump:
+            p_backup = root / "reconstruction_old_rigs_format.json"
+            shutil.copy(p_reconstruction, p_backup)
+            with open(p_reconstruction, "w") as f:
+                json.dump(recs_raw, f, indent=4, sort_keys=True)
 
     # Assignments file
     p_assignments = root / "rig_assignments.json"
-    assignments_raw = json.load(open(p_assignments))
-    if isinstance(assignments_raw, dict):
-        print(f"Updating rig format of {p_assignments}")
-        new_assignments = []
-        for rig_assignment in assignments_raw.values():
-            new_assignments.extend(rig_assignment)
-        p_backup = root / "rig_assignments_old_rigs_format.json"
-        shutil.copy(p_assignments, p_backup)
-        with open(p_assignments, "w") as f:
-            json.dump(new_assignments, f, indent=4, sort_keys=True)
+    if p_assignments.exists():
+        assignments_raw = json.load(open(p_assignments))
+        if isinstance(assignments_raw, dict):
+            print(f"Updating rig format of {p_assignments}")
+            new_assignments = []
+            for rig_assignment in assignments_raw.values():
+                new_assignments.extend(rig_assignment)
+            p_backup = root / "rig_assignments_old_rigs_format.json"
+            shutil.copy(p_assignments, p_backup)
+            with open(p_assignments, "w") as f:
+                json.dump(new_assignments, f, indent=4, sort_keys=True)
 
 
 def load_rig_assignments(root: str) -> t.Dict[str, t.List[str]]:

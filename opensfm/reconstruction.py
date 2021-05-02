@@ -7,8 +7,10 @@ from collections import defaultdict
 from itertools import combinations
 from timeit import default_timer as timer
 from typing import Dict, Any, List, Tuple, Set, Optional
+from functools import reduce
 
 import cv2
+import math
 import numpy as np
 from opensfm import (
     exif as oexif,
@@ -216,7 +218,7 @@ TPairArguments = Tuple[
     str, str, np.ndarray, np.ndarray, pygeometry.Camera, pygeometry.Camera, float
 ]
 TPairTracks = Tuple[List[str], np.ndarray, np.ndarray]
-
+# TPairTracks_simple = List[str]
 
 def compute_image_pairs(
     track_dict: Dict[Tuple[str, str], TPairTracks], data: DataSetBase
@@ -231,6 +233,39 @@ def compute_image_pairs(
     score = [r for im1, im2, r in result if r > 0]
     order = np.argsort(-np.array(score))
     return [pairs[o] for o in order]
+
+def redistribution(num, rd_type="linear"):
+    if rd_type == "log":
+        return math.log(num,2)
+    else:
+        return num
+
+def compute_image_pairs_agent(
+    track_dict: Dict[Tuple[str, str], TPairTracks], data: DataSetBase
+):
+    """another implementation of initial pair preference"""
+    track_list = {} # track_point -> list of image that contains it
+    for img_pair, track_info in track_dict.items():
+        for single_point in track_info[0]:
+            if single_point in track_list:
+                track_list[single_point].append(img_pair[0])
+                track_list[single_point].append(img_pair[1])
+            else:
+                track_list[single_point] = []
+                track_list[single_point].append(img_pair[0])
+                track_list[single_point].append(img_pair[1])
+    quality_of_track = {}
+    for track in track_list:
+        quality_of_track[track] = redistribution(len(set(track_list[track])), "log")
+    pairs = [img_pair for img_pair in track_dict]
+    score = [sum(quality_of_track[track] for track in track_info[0]) \
+        for _ ,track_info in track_dict.items()]
+
+    # for i in range(len(pairs)):
+    #     print(f"{pairs[i]}: {score[i]}")
+    order = np.argsort(-np.array(score))
+    return [pairs[o] for o in order]
+
 
 
 def _pair_reconstructability_arguments(
@@ -1301,6 +1336,38 @@ def grow_reconstruction(
     paint_reconstruction(data, tracks_manager, reconstruction)
     return reconstruction, report
 
+# def affinity(img, touched, tracks_manager, all_img):
+#     img_track_set = set([])
+#     for img2 in all_img:
+#         if img2 != img:
+#             common_track = tracking.common_tracks(tracks_manager, img, img2)[0]
+#             for track_point in common_track:
+#                 if track_point in touched:
+#                     img_track_set.add(track_point)
+#     print(f"affinity for {img} is {len(img_track_set)}")
+#     return len(img_track_set)
+
+# def all_his_track(img, tracks_manager, all_img):
+#     track_set = set([])
+#     for img2 in all_img:
+#         if img2 != img:
+#             track_set.union(tracking.common_tracks(tracks_manager, img, img2)[0])
+#     return track_set
+
+# def reorder_by_affinity(remaining, touched_tracks, tracks_manager):
+#     if len(remaining) == 1:
+#         return remaining
+#     remaining = list(remaining)
+#     # print(f"touched: {touched_tracks}")
+#     score = []
+#     all_img = tracks_manager.get_shot_ids()
+#     for img in remaining:
+#         score.append(affinity(img, touched_tracks, tracks_manager, all_img))
+#     nextIndex = score.index(max(score))
+#     nextImg = remaining[nextIndex]
+#     remaining.pop(nextIndex)
+#     new_tracks = all_his_track(nextImg, tracks_manager, all_img)
+#     return [nextImg] + reorder_by_affinity(remaining, touched_tracks.union(new_tracks), tracks_manager)
 
 def incremental_reconstruction(
     data: DataSetBase, tracks_manager: pysfm.TracksManager
@@ -1319,7 +1386,11 @@ def incremental_reconstruction(
     gcp = data.load_ground_control_points()
     common_tracks = tracking.all_common_tracks(tracks_manager)
     reconstructions = []
-    pairs = compute_image_pairs(common_tracks, data)
+
+
+    #pairs = compute_image_pairs(common_tracks, data)
+    pairs = compute_image_pairs_agent(common_tracks, data)
+    
     chrono.lap("compute_image_pairs")
     report["num_candidate_image_pairs"] = len(pairs)
     report["reconstructions"] = []
@@ -1334,6 +1405,7 @@ def incremental_reconstruction(
 
             if reconstruction:
                 remaining_images -= set(reconstruction.shots)
+                #remaining_images = set(reorder_by_affinity(remaining_images, set(tracking.common_tracks(tracks_manager, im1, im2)[0]), tracks_manager))
                 reconstruction, rec_report["grow"] = grow_reconstruction(
                     data,
                     tracks_manager,
